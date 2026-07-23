@@ -2,8 +2,67 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>ブロックブラスト3D</title>
+
+<!-- ホーム画面に追加 / 全画面表示(PWA) -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#F6F7FA">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ブロブラ3D">
+<meta name="application-name" content="ブロブラ3D">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+
+<!-- LINEなどのアプリ内ブラウザから外部ブラウザ(Safari/Chrome)へ誘導する -->
+<script>
+(function(){
+  try{
+    var ua = navigator.userAgent || navigator.vendor || '';
+    var href = window.location.href;
+
+    // すでに外部ブラウザで開き直した後は何もしない(無限ループ防止)
+    if (href.indexOf('openExternalBrowser=1') !== -1) return;
+    if (sessionStorage.getItem('extBrowserTried') === '1') return;
+
+    var isLine      = /Line/i.test(ua);
+    var isAndroid   = /Android/i.test(ua);
+    var isIOS       = /iPhone|iPad|iPod/i.test(ua);
+    // LINE以外の主なアプリ内(WebView)ブラウザ
+    var isOtherInApp = /FBAN|FBAV|FB_IAB|Instagram|Messenger|Twitter|Line\/|MicroMessenger|KAKAOTALK|; wv\)/i.test(ua)
+                       && !/CriOS|FxiOS|EdgiOS/i.test(ua);
+
+    // --- LINE: openExternalBrowser=1 を付けて遷移すると標準ブラウザで開き直される ---
+    if (isLine) {
+      sessionStorage.setItem('extBrowserTried', '1');
+      var sep = href.indexOf('?') === -1 ? '?' : '&';
+      window.location.href = href + sep + 'openExternalBrowser=1';
+      return;
+    }
+
+    // --- Android のその他アプリ内ブラウザ: intent:// で Chrome を開く ---
+    if (isAndroid && isOtherInApp) {
+      sessionStorage.setItem('extBrowserTried', '1');
+      var noScheme = href.replace(/^https?:\/\//, '');
+      window.location.href = 'intent://' + noScheme +
+        '#Intent;scheme=https;package=com.android.chrome;end';
+      return;
+    }
+
+    // --- iOS のその他アプリ内ブラウザ: 自動で開けないため案内を表示 ---
+    if (isIOS && isOtherInApp) {
+      window.addEventListener('DOMContentLoaded', function(){
+        var g = document.getElementById('extBrowserGuide');
+        if (g) g.classList.remove('hidden');
+      });
+    }
+  }catch(e){ /* 判定できない環境では通常表示のまま続行 */ }
+})();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
@@ -296,6 +355,14 @@
 </div>
 
 <div id="tray"></div>
+
+<div class="overlay hidden" id="extBrowserGuide">
+  <div class="card" style="text-align:center;">
+    <h2>Safariで開いてください</h2>
+    <p style="text-align:left;">アプリ内ブラウザでは正しく動作しない場合があります。画面右下(または右上)の <b>「…」</b> メニューから <b>「Safariで開く」</b> または <b>「ブラウザで開く」</b> を選んでください。</p>
+    <button id="copyUrlBtn">URLをコピー</button>
+  </div>
+</div>
 
 <div class="overlay" id="introOverlay">
   <div class="card">
@@ -960,11 +1027,38 @@
     gameOverOverlay.classList.add('hidden');
   });
 
+  /* ---------------- fullscreen ---------------- */
+  // ユーザー操作(タップ)を機に全画面表示を要求する。
+  // iOS Safari は Element.requestFullscreen 非対応なので、その場合は
+  // 「ホーム画面に追加」で standalone 起動したときに全画面になる。
+  function requestFullscreenSafe(){
+    try{
+      const el = document.documentElement;
+      const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if(fn) fn.call(el).catch(()=>{});
+    }catch(e){ /* 非対応環境は無視 */ }
+  }
+
   /* ---------------- intro overlay ---------------- */
   const introOverlay = document.getElementById('introOverlay');
   document.getElementById('startBtn').addEventListener('click', ()=>{
+    requestFullscreenSafe();
     introOverlay.classList.add('hidden');
   });
+
+  /* ---------------- external browser guide ---------------- */
+  const copyUrlBtn = document.getElementById('copyUrlBtn');
+  if(copyUrlBtn){
+    copyUrlBtn.addEventListener('click', async ()=>{
+      const url = window.location.href.split('?')[0];
+      try{
+        await navigator.clipboard.writeText(url);
+        copyUrlBtn.textContent = 'コピーしました';
+      }catch(e){
+        copyUrlBtn.textContent = url;
+      }
+    });
+  }
   document.getElementById('helpBtn').addEventListener('click', ()=>{
     introOverlay.classList.remove('hidden');
   });
