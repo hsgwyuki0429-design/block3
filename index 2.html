@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ブロックブラスト3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#F6F7FA;
+    --bg-1:#FFFFFF;
+    --line:#E3E6EE;
+    --ink:#1D2130;
+    --ink-dim:#8A90A6;
+    --xy:#FF6B6B;
+    --yz:#0FAFA0;
+    --xz:#E3A008;
+    --good:#22B14C;
+    --bad:#E5484D;
+    --shadow: 0 2px 14px rgba(30,35,60,0.07);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:var(--bg-0);
+    font-family:'Noto Sans JP', sans-serif;
+    color:var(--ink);
+    touch-action:none;
+    overscroll-behavior:none;
+  }
+  #canvasWrap{position:fixed; inset:0;}
+  canvas{display:block; touch-action:none;}
+
+  /* top bar */
+  #topbar{
+    position:fixed; top:0; left:0; right:0;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: max(12px, env(safe-area-inset-top)) 16px 10px 16px;
+    pointer-events:none;
+    z-index:20;
+    background: linear-gradient(to bottom, rgba(246,247,250,0.92), rgba(246,247,250,0));
+  }
+  #logo{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.06em;
+    color:var(--ink-dim);
+  }
+  #logo b{color:var(--ink);}
+  #scoreBox{
+    text-align:right;
+  }
+  #scoreLabel{
+    font-size:10px; letter-spacing:0.12em; color:var(--ink-dim); font-weight:500;
+  }
+  #scoreValue{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:26px;
+    line-height:1;
+    color:var(--ink);
+  }
+  #helpBtn, #soundBtn, #rankBtn{
+    pointer-events:all;
+    width:30px; height:30px; border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--bg-1);
+    color:var(--ink-dim);
+    font-size:14px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;
+    margin-left:8px;
+    box-shadow:var(--shadow);
+  }
+  #scoreRow{display:flex; align-items:center;}
+
+  /* legend */
+  #legend{
+    position:fixed; left:0; right:0; bottom:118px;
+    display:flex; justify-content:center; gap:10px;
+    pointer-events:none;
+    z-index:15;
+  }
+  .legendChip{
+    display:flex; align-items:center; gap:5px;
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:4px 10px 4px 6px;
+    font-size:10px; color:var(--ink-dim); font-weight:500;
+    box-shadow:var(--shadow);
+  }
+  .legendDot{width:9px; height:9px; border-radius:3px;}
+
+  /* tray */
+  #tray{
+    position:fixed; left:0; right:0; bottom:0;
+    padding: 10px 12px max(12px, env(safe-area-inset-bottom)) 12px;
+    display:flex; justify-content:center; gap:10px;
+    z-index:20;
+    height:108px;
+    align-items:center;
+  }
+  .pieceCard{
+    width:96px; height:88px;
+    border-radius:16px;
+    background:transparent;
+    border:1px solid var(--line);
+    position:relative;
+    transition: opacity .15s ease, box-shadow .15s ease;
+    overflow:hidden;
+    box-shadow:var(--shadow);
+  }
+  .pieceCard.dragging{
+    box-shadow:none;
+    border-color:var(--line);
+  }
+  .pieceCard.empty{
+    border-style:dashed;
+    box-shadow:none;
+  }
+  .planeTag{
+    position:absolute; top:6px; right:8px;
+    font-family:'Space Grotesk', sans-serif;
+    font-size:9px; font-weight:700; letter-spacing:0.04em;
+    opacity:0.85;
+    pointer-events:none;
+  }
+
+  /* overlays */
+  .overlay{
+    position:fixed; inset:0; z-index:50;
+    background:rgba(29,33,48,0.35);
+    backdrop-filter: blur(3px);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .overlay.hidden{display:none;}
+  .card{
+    max-width:360px;
+    width:100%;
+    background:var(--bg-1);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:22px 22px 20px 22px;
+    box-shadow: 0 12px 40px rgba(30,35,60,0.16);
+  }
+  .card h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:19px; margin:0 0 14px 0;
+    letter-spacing:0.01em;
+    color:var(--ink);
+  }
+  .card p{
+    font-size:13.5px; line-height:1.7; color:var(--ink-dim); margin:0 0 10px 0;
+  }
+  .card .rule{
+    display:flex; gap:10px; align-items:flex-start; margin-bottom:12px;
+  }
+  .rule .tag{
+    flex-shrink:0;
+    font-family:'Space Grotesk', sans-serif;
+    font-size:11px; font-weight:700;
+    background:var(--bg-0);
+    color:var(--ink);
+    padding:3px 8px; border-radius:8px;
+    white-space:nowrap;
+    border:1px solid var(--line);
+  }
+  .rule p{margin:0; font-size:13px;}
+  .card button{
+    width:100%;
+    margin-top:8px;
+    padding:13px;
+    border-radius:12px;
+    border:none;
+    background:var(--ink);
+    color:var(--bg-1);
+    font-family:'Noto Sans JP', sans-serif;
+    font-weight:700;
+    font-size:14.5px;
+    letter-spacing:0.02em;
+  }
+  .card .scoreFinal{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:42px; font-weight:700;
+    color:var(--ink); margin: 6px 0 2px 0;
+  }
+
+  /* juice: score popup */
+  .scorePop{
+    position:fixed;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700; font-size:19px;
+    color:var(--good);
+    pointer-events:none; z-index:60;
+    opacity:1; transform:translateY(0) scale(1);
+    transition: transform .85s cubic-bezier(.2,.8,.3,1), opacity .85s ease-out;
+  }
+  .scorePop.go{ transform:translateY(-46px) scale(1.15); opacity:0; }
+
+  /* juice: combo banner */
+  .comboBanner{
+    position:fixed; top:38%; left:50%;
+    transform:translate(-50%,-50%) scale(0.6);
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700; font-size:34px;
+    color:var(--ink);
+    text-shadow: 0 2px 0 var(--bg-1), 0 4px 18px rgba(30,35,60,0.25);
+    pointer-events:none; z-index:60;
+    opacity:0;
+    transition: transform .35s cubic-bezier(.2,1.4,.4,1), opacity .35s ease-out;
+    letter-spacing:0.02em;
+  }
+  .comboBanner.go{ transform:translate(-50%,-50%) scale(1); opacity:1; }
+  .comboBanner.out{ transform:translate(-50%,-70%) scale(1.05); opacity:0; }
+
+  /* juice: screen punch flash */
+  #flash{
+    position:fixed; inset:0; z-index:40;
+    pointer-events:none;
+    background:var(--good);
+    opacity:0;
+  }
+  #flash.go{ opacity:0.16; transition:opacity .06s ease-out; }
+  #flash.fade{ opacity:0; transition:opacity .32s ease-out; }
+
+  #canvasWrap.punch{ animation:punch .18s ease-out; }
+  @keyframes punch{
+    0%{ transform:scale(1); }
+    35%{ transform:scale(1.015); }
+    100%{ transform:scale(1); }
+  }
+
+  /* leaderboard */
+  #rankingList{
+    list-style:none; margin:0; padding:0;
+    max-height:280px; overflow-y:auto;
+  }
+  #rankingList li{
+    display:flex; align-items:center; gap:10px;
+    padding:9px 4px;
+    border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  #rankingList li:last-child{ border-bottom:none; }
+  #rankingList .rk{
+    font-family:'Space Grotesk', sans-serif; font-weight:700;
+    color:var(--ink-dim); width:22px; flex-shrink:0;
+  }
+  #rankingList .rname{ flex:1; color:var(--ink); }
+  #rankingList .rscore{
+    font-family:'Space Grotesk', sans-serif; font-weight:700; color:var(--ink);
+  }
+  #rankNote{ font-size:11.5px; color:var(--ink-dim); margin:-4px 0 12px 0; }
+  #nameEntry{
+    display:flex; gap:8px; margin-top:4px;
+  }
+  #nameInput{
+    flex:1; min-width:0;
+    padding:11px 12px; border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--bg-0);
+    font-family:'Noto Sans JP', sans-serif;
+    font-size:14px; color:var(--ink);
+  }
+  #submitScoreBtn{
+    width:auto; margin-top:0; padding:11px 16px;
+    white-space:nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvasWrap"></div>
+<div id="flash"></div>
+
+<div id="topbar">
+  <div id="logo">BLOCK<b>BLAST</b>3D</div>
+  <div id="scoreRow">
+    <div id="scoreBox">
+      <div id="scoreLabel">SCORE</div>
+      <div id="scoreValue">0</div>
+    </div>
+    <button id="helpBtn">?</button>
+    <button id="soundBtn">♪</button>
+    <button id="rankBtn">🏆</button>
+  </div>
+</div>
+
+<div id="legend">
+  <div class="legendChip"><div class="legendDot" style="background:var(--xy)"></div>XY面</div>
+  <div class="legendChip"><div class="legendDot" style="background:var(--yz)"></div>YZ面</div>
+  <div class="legendChip"><div class="legendDot" style="background:var(--xz)"></div>XZ面</div>
+</div>
+
+<div id="tray"></div>
+
+<div class="overlay" id="introOverlay">
+  <div class="card">
+    <h2>遊び方</h2>
+    <div class="rule"><div class="tag">1本指(空)</div><p>ドラッグして視点を回転。</p></div>
+    <div class="rule"><div class="tag">2本指</div><p>ピンチでズームイン・アウト。</p></div>
+    <div class="rule"><div class="tag">1本指(ブロック上)</div><p>下のブロックをドラッグしてグリッドに配置。指を離すと即確定。箱に戻せばキャンセル。</p></div>
+    <div class="rule"><div class="tag">条件</div><p>ブロックは一番下の床、または既に置かれている立方体に接する位置にしか置けない。</p></div>
+    <div class="rule"><div class="tag">消去</div><p>X・Y・Zどれかの軸で1列(4マス)揃うとそのラインが消える。</p></div>
+    <div class="rule"><div class="tag">その他</div><p>右上の♪でサウンドのオン/オフ、🏆で世界ランキングを確認できる。</p></div>
+    <button id="startBtn">はじめる</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="gameOverOverlay">
+  <div class="card" style="text-align:center;">
+    <h2>ゲームオーバー</h2>
+    <p>どのブロックも置ける場所がありません</p>
+    <div class="scoreFinal" id="finalScore">0</div>
+    <p style="margin-top:-4px;">最終スコア</p>
+    <div id="nameEntry">
+      <input id="nameInput" type="text" maxlength="12" placeholder="名前を入力(世界ランキングに登録)">
+      <button id="submitScoreBtn">登録</button>
+    </div>
+    <button id="restartBtn">もう一度</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="rankingOverlay">
+  <div class="card">
+    <h2>世界ランキング</h2>
+    <p id="rankNote"></p>
+    <ol id="rankingList"></ol>
+    <button id="closeRankBtn">閉じる</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- config ---------------- */
+  const N = 4; // grid size
+  const CELL = 1;
+  const PLANE_COLOR = { XY: 0xFF6B6B, YZ: 0x0FAFA0, XZ: 0xE3A008 };
+  const PLANE_COLOR_CSS = { XY: '#FF6B6B', YZ: '#0FAFA0', XZ: '#E3A008' };
+
+  // ==== 世界ランキング設定 ====
+  // Firebase Realtime Database の URL をここに入れると、世界中のプレイヤーと
+  // スコアを共有するランキングになる(空のままだと「この端末だけ」のランキングとして動く)。
+  // 手順は README.md を参照。
+  // 例: 'https://your-project-id-default-rtdb.firebaseio.com'
+  const FIREBASE_DB_URL = '';
+
+  /* ---------------- sound ---------------- */
+  const Sound = (function(){
+    let ctx = null;
+    let muted = false;
+    function ensureCtx(){
+      if(!ctx){ ctx = new (window.AudioContext||window.webkitAudioContext)(); }
+      if(ctx.state === 'suspended') ctx.resume();
+      return ctx;
+    }
+    function tone(freq, dur, type, gainStart, delay){
+      if(muted) return;
+      try{
+        const ac = ensureCtx();
+        const t0 = ac.currentTime + (delay||0);
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = type || 'sine';
+        osc.frequency.setValueAtTime(freq, t0);
+        gain.gain.setValueAtTime(gainStart||0.15, t0);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+        osc.connect(gain); gain.connect(ac.destination);
+        osc.start(t0); osc.stop(t0+dur+0.02);
+      }catch(e){ /* audio not available */ }
+    }
+    return {
+      place(){ tone(240, 0.09, 'triangle', 0.14); },
+      invalid(){ tone(140, 0.12, 'square', 0.08); },
+      clearLine(comboIndex){
+        const base = 420;
+        for(let i=0;i<=Math.max(0,comboIndex);i++){
+          tone(base*Math.pow(1.16,i), 0.16, 'sine', 0.2, i*0.055);
+        }
+      },
+      gameOver(){ tone(200,0.45,'sawtooth',0.12); tone(100,0.55,'sawtooth',0.1,0.14); },
+      tap(){ tone(650,0.035,'square',0.05); },
+      toggleMute(){ muted = !muted; return muted; },
+      isMuted(){ return muted; }
+    };
+  })();
+
+  const SHAPES = [
+    [[0,0]],
+    [[0,0],[1,0]],
+    [[0,0],[1,0],[2,0]],
+    [[0,0],[1,0],[2,0],[3,0]],
+    [[0,0],[1,0],[0,1],[1,1]],
+    [[0,0],[1,0],[0,1]],
+    [[0,0],[1,0],[2,0],[0,1]],
+    [[0,0],[1,0],[2,0],[2,1]],
+    [[0,0],[1,0],[2,0],[1,1]],
+    [[1,0],[2,0],[0,1],[1,1]],
+    [[0,0],[1,0],[1,1],[2,1]],
+    [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]],
+    [[1,0],[0,1],[1,1],[2,1],[1,2]]
+  ];
+
+  function rotateShape(shape){
+    const r = shape.map(([x,y])=>[y,-x]);
+    const minX = Math.min(...r.map(c=>c[0]));
+    const minY = Math.min(...r.map(c=>c[1]));
+    return r.map(([x,y])=>[x-minX,y-minY]);
+  }
+  function normalizeShape(shape){
+    const minX = Math.min(...shape.map(c=>c[0]));
+    const minY = Math.min(...shape.map(c=>c[1]));
+    return shape.map(([x,y])=>[x-minX,y-minY]);
+  }
+
+  function randomPiece(){
+    let shape = SHAPES[Math.floor(Math.random()*SHAPES.length)];
+    const rot = Math.floor(Math.random()*4);
+    for(let i=0;i<rot;i++) shape = rotateShape(shape);
+    shape = normalizeShape(shape);
+    const planes = ['XY','YZ','XZ'];
+    const plane = planes[Math.floor(Math.random()*planes.length)];
+    return { shape, plane, id: Math.random().toString(36).slice(2) };
+  }
+
+  function pieceCells3D(piece, anchor){
+    const cells = [];
+    for(const [dx,dy] of piece.shape){
+      let c;
+      if(piece.plane==='XY') c = {x:anchor.x+dx, y:anchor.y+dy, z:anchor.z};
+      else if(piece.plane==='YZ') c = {x:anchor.x, y:anchor.y+dx, z:anchor.z+dy};
+      else c = {x:anchor.x+dx, y:anchor.y, z:anchor.z+dy};
+      cells.push(c);
+    }
+    return cells;
+  }
+
+  function inBounds(c){
+    return c.x>=0 && c.x<N && c.y>=0 && c.y<N && c.z>=0 && c.z<N;
+  }
+
+  /* ---------------- grid state ---------------- */
+  // grid[x][y][z] = null or {color}
+  let grid = [];
+  function resetGrid(){
+    grid = [];
+    for(let x=0;x<N;x++){
+      grid.push([]);
+      for(let y=0;y<N;y++){
+        grid[x].push(new Array(N).fill(null));
+      }
+    }
+  }
+  resetGrid();
+
+  function isGridEmpty(){
+    for(let x=0;x<N;x++) for(let y=0;y<N;y++) for(let z=0;z<N;z++) if(grid[x][y][z]) return false;
+    return true;
+  }
+
+  function hasAdjacentFilled(c){
+    const dirs=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+    for(const [dx,dy,dz] of dirs){
+      const nx=c.x+dx, ny=c.y+dy, nz=c.z+dz;
+      if(nx>=0&&nx<N&&ny>=0&&ny<N&&nz>=0&&nz<N&&grid[nx][ny][nz]) return true;
+    }
+    return false;
+  }
+
+  function isValidPlacement(piece, anchor){
+    const cells = pieceCells3D(piece, anchor);
+    for(const c of cells){
+      if(!inBounds(c)) return {valid:false, cells};
+      if(grid[c.x][c.y][c.z]) return {valid:false, cells};
+    }
+    // must touch the floor (y===0, the bottom layer) OR an already-filled block
+    let touchesBase = false;
+    for(const c of cells){
+      if(c.y===0 || hasAdjacentFilled(c)){ touchesBase = true; break; }
+    }
+    if(!touchesBase) return {valid:false, cells};
+    return {valid:true, cells};
+  }
+
+  function canPlaceAnywhere(piece){
+    for(let x=0;x<N;x++) for(let y=0;y<N;y++) for(let z=0;z<N;z++){
+      if(isValidPlacement(piece, {x,y,z}).valid) return true;
+    }
+    return false;
+  }
+
+  /* ---------------- three.js scene ---------------- */
+  const wrap = document.getElementById('canvasWrap');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xF3F4F8);
+
+  const camera = new THREE.PerspectiveCamera(48, window.innerWidth/window.innerHeight, 0.1, 100);
+  const renderer = new THREE.WebGLRenderer({antialias:true, alpha:false});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  wrap.appendChild(renderer.domElement);
+
+  const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+  scene.add(ambient);
+  const dir1 = new THREE.DirectionalLight(0xffffff, 0.55);
+  dir1.position.set(6,10,7);
+  scene.add(dir1);
+  const dir2 = new THREE.DirectionalLight(0xAAB4E8, 0.25);
+  dir2.position.set(-8,-4,-6);
+  scene.add(dir2);
+
+  const gridGroup = new THREE.Group();
+  scene.add(gridGroup);
+  const ghostGroup = new THREE.Group();
+  scene.add(ghostGroup);
+
+  const floorHelper = new THREE.GridHelper(N, N, 0xC7CBDA, 0xE5E7EF);
+  floorHelper.position.y = -N/2 - 0.03;
+  floorHelper.material.transparent = true;
+  floorHelper.material.opacity = 0.9;
+  scene.add(floorHelper);
+
+  const HALF = N/2;
+  function cellCenter(i){ return i - (N-1)/2; }
+
+  const EMPTY_FILL = new THREE.Color(0xE5E7EF);
+  const EDGE_EMPTY = new THREE.Color(0xD3D7E3);
+  const EDGE_FILLED = new THREE.Color(0x1D2130);
+
+  const cellMeshes = []; // flat list
+  const cellByIndex = {}; // "x,y,z" -> mesh
+
+  const boxGeo = new THREE.BoxGeometry(0.94,0.94,0.94);
+  const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+
+  for(let x=0;x<N;x++){
+    for(let y=0;y<N;y++){
+      for(let z=0;z<N;z++){
+        const mat = new THREE.MeshStandardMaterial({
+          color: EMPTY_FILL, transparent:true, opacity:0,
+          depthWrite:false, roughness:0.5, metalness:0.1
+        });
+        const mesh = new THREE.Mesh(boxGeo, mat);
+        mesh.position.set(cellCenter(x), cellCenter(y), cellCenter(z));
+        mesh.userData = {x,y,z, filled:false};
+        gridGroup.add(mesh);
+
+        const edgeMat = new THREE.LineBasicMaterial({color:EDGE_EMPTY, transparent:true, opacity:0});
+        const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+        edges.position.copy(mesh.position);
+        gridGroup.add(edges);
+        mesh.userData.edges = edges;
+
+        cellMeshes.push(mesh);
+        cellByIndex[x+','+y+','+z] = mesh;
+      }
+    }
+  }
+
+  function setCellFilled(x,y,z,colorHex){
+    const mesh = cellByIndex[x+','+y+','+z];
+    mesh.material.color.set(colorHex);
+    mesh.material.opacity = 0.88;
+    mesh.material.depthWrite = true;
+    mesh.material.emissive = new THREE.Color(colorHex).multiplyScalar(0.15);
+    mesh.userData.filled = true;
+    mesh.userData.edges.material.color.set(EDGE_FILLED);
+    mesh.userData.edges.material.opacity = 0.9;
+  }
+
+  function setCellEmpty(x,y,z){
+    const mesh = cellByIndex[x+','+y+','+z];
+    mesh.material.color.set(EMPTY_FILL);
+    mesh.material.opacity = 0;
+    mesh.material.depthWrite = false;
+    mesh.material.emissive = new THREE.Color(0x000000);
+    mesh.userData.filled = false;
+    mesh.userData.edges.material.color.set(EDGE_EMPTY);
+    mesh.userData.edges.material.opacity = 0;
+  }
+
+  // animated clear: fade a cell out then reset
+  function animateClearCell(x,y,z){
+    const mesh = cellByIndex[x+','+y+','+z];
+    const edges = mesh.userData.edges;
+    const startScale = 1;
+    const dur = 260;
+    const t0 = performance.now();
+    mesh.material.color.set(0xffffff);
+    mesh.material.emissive.set(0xffffff);
+    function step(now){
+      const t = Math.min(1, (now-t0)/dur);
+      const s = startScale * (1-t) + 0.001*t;
+      mesh.scale.setScalar(s);
+      edges.scale.setScalar(s);
+      mesh.material.opacity = 0.9*(1-t);
+      if(t<1) requestAnimationFrame(step);
+      else{
+        mesh.scale.setScalar(1);
+        edges.scale.setScalar(1);
+        setCellEmpty(x,y,z);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  /* ---------------- camera orbit ---------------- */
+  let theta = Math.PI/4, phi = Math.PI/3, radius = 9.2;
+  const target = new THREE.Vector3(0,0,0);
+  function updateCamera(){
+    camera.position.x = target.x + radius*Math.sin(phi)*Math.sin(theta);
+    camera.position.z = target.z + radius*Math.sin(phi)*Math.cos(theta);
+    camera.position.y = target.y + radius*Math.cos(phi);
+    camera.lookAt(target);
+  }
+  updateCamera();
+
+  function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+  /* ---------------- tray 3D previews ---------------- */
+  const trayScenes = [];
+  for(let i=0;i<3;i++){
+    const s = new THREE.Scene();
+    const grp = new THREE.Group();
+    s.add(grp);
+    trayScenes.push({scene:s, group:grp});
+  }
+  const trayCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 20);
+  const trayPieceGeo = new THREE.BoxGeometry(0.82,0.82,0.82);
+  const trayEdgeGeo = new THREE.EdgesGeometry(trayPieceGeo);
+
+  // fixed camera distance shared by every tray slot, so a single cube renders at the
+  // same true scale as a cube inside a bigger piece (no per-piece zoom-to-fit)
+  function shapeBoundRadius(shape){
+    let cx=0, cy=0;
+    for(const [x,y] of shape){ cx+=x; cy+=y; }
+    const n = shape.length; cx/=n; cy/=n;
+    let maxAbs = 0;
+    for(const [x,y] of shape){ maxAbs = Math.max(maxAbs, Math.abs(x-cx), Math.abs(y-cy)); }
+    return maxAbs;
+  }
+  let maxShapeRadius = 0;
+  for(const shape of SHAPES) maxShapeRadius = Math.max(maxShapeRadius, shapeBoundRadius(shape));
+  const TRAY_FOV_HALF = THREE.MathUtils.degToRad(38/2);
+  const TRAY_CAM_DIST = (maxShapeRadius + 0.65) / Math.sin(TRAY_FOV_HALF);
+
+  function buildTrayPieceMesh(piece){
+    const group = new THREE.Group();
+    if(!piece) return group;
+    const cells = pieceCells3D(piece, {x:0,y:0,z:0});
+    let cx=0, cy=0, cz=0;
+    for(const c of cells){ cx+=c.x; cy+=c.y; cz+=c.z; }
+    const n = cells.length; cx/=n; cy/=n; cz/=n;
+    const colorHex = PLANE_COLOR[piece.plane];
+    for(const c of cells){
+      // unlit flat color so the piece's true color always reads clearly, regardless of scene lighting
+      const mat = new THREE.MeshBasicMaterial({ color:colorHex });
+      const m = new THREE.Mesh(trayPieceGeo, mat);
+      m.position.set(c.x-cx, c.y-cy, c.z-cz);
+      group.add(m);
+      const edges = new THREE.LineSegments(trayEdgeGeo, new THREE.LineBasicMaterial({color:0x1D2130, transparent:true, opacity:0.5}));
+      edges.position.copy(m.position);
+      group.add(edges);
+    }
+    return group;
+  }
+
+  function updateTrayScenes(){
+    tray.forEach((piece, idx)=>{
+      const slot = trayScenes[idx];
+      while(slot.group.children.length) slot.group.remove(slot.group.children[0]);
+      slot.group.add(buildTrayPieceMesh(piece));
+    });
+  }
+
+  function renderTrayPreviews(){
+    renderer.setScissorTest(true);
+    const cards = trayEl.children;
+    for(let idx=0; idx<tray.length; idx++){
+      if(!tray[idx]) continue;
+      if(idx===draggingSlot && !overTray) continue; // piece is "out" of the box while dragging
+      const cardEl = cards[idx];
+      if(!cardEl) continue;
+      const rect = cardEl.getBoundingClientRect();
+      if(rect.width<=0 || rect.height<=0) continue;
+      const x = rect.left, y = window.innerHeight - rect.bottom, w = rect.width, h = rect.height;
+      renderer.setViewport(x,y,w,h);
+      renderer.setScissor(x,y,w,h);
+      renderer.setClearColor(0xFFFFFF, 1);
+      renderer.clear(true, true, true);
+      trayCamera.aspect = w/h;
+      trayCamera.updateProjectionMatrix();
+      const r = TRAY_CAM_DIST;
+      trayCamera.position.set(r*Math.sin(phi)*Math.sin(theta), r*Math.cos(phi), r*Math.sin(phi)*Math.cos(theta));
+      trayCamera.lookAt(0,0,0);
+      renderer.render(trayScenes[idx].scene, trayCamera);
+    }
+    renderer.setScissorTest(false);
+    renderer.setViewport(0,0,window.innerWidth, window.innerHeight);
+  }
+
+  /* ---------------- resize ---------------- */
+  window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  /* ---------------- tray & pieces ---------------- */
+  const trayEl = document.getElementById('tray');
+  let tray = [randomPiece(), randomPiece(), randomPiece()];
+  let draggingSlot = null;
+  let lastPlacement = null; // {valid, cells, piece}
+  let overTray = false;
+
+  function renderTray(){
+    trayEl.innerHTML = '';
+    tray.forEach((piece, idx)=>{
+      const card = document.createElement('div');
+      card.className = 'pieceCard' + (piece===null ? ' empty' : '');
+      if(piece){
+        const tag = document.createElement('div');
+        tag.className = 'planeTag';
+        tag.textContent = piece.plane;
+        tag.style.color = PLANE_COLOR_CSS[piece.plane];
+        card.appendChild(tag);
+
+        card.addEventListener('touchstart', (e)=>{ startDrag(idx, e.touches[0].clientX, e.touches[0].clientY); }, {passive:true});
+        card.addEventListener('mousedown', (e)=>{ startDrag(idx, e.clientX, e.clientY); });
+      }
+      trayEl.appendChild(card);
+    });
+    updateTrayScenes();
+  }
+  renderTray();
+
+  function refillIfNeeded(){
+    if(tray.every(p=>p===null)){
+      tray = [randomPiece(), randomPiece(), randomPiece()];
+    }
+    renderTray();
+    checkGameOver();
+  }
+
+  /* ---------------- score ---------------- */
+  let score = 0;
+  const scoreValueEl = document.getElementById('scoreValue');
+  function addScore(n){
+    score += n;
+    scoreValueEl.textContent = score;
+  }
+
+  /* ---------------- juice: score popup / combo banner / screen punch ---------------- */
+  function popScore(amount){
+    const el = document.createElement('div');
+    el.className = 'scorePop';
+    el.textContent = '+'+amount;
+    const rect = scoreValueEl.getBoundingClientRect();
+    el.style.left = rect.left+'px';
+    el.style.top = rect.top+'px';
+    document.body.appendChild(el);
+    requestAnimationFrame(()=> el.classList.add('go'));
+    setTimeout(()=> el.remove(), 900);
+  }
+
+  let comboElActive = null;
+  function showCombo(lineCount){
+    if(comboElActive) comboElActive.remove();
+    const el = document.createElement('div');
+    el.className = 'comboBanner';
+    el.textContent = 'COMBO ×' + lineCount;
+    document.body.appendChild(el);
+    comboElActive = el;
+    requestAnimationFrame(()=> el.classList.add('go'));
+    setTimeout(()=>{ el.classList.add('out'); }, 480);
+    setTimeout(()=>{ el.remove(); if(comboElActive===el) comboElActive=null; }, 700);
+  }
+
+  function screenPunch(){
+    const wrap = document.getElementById('canvasWrap');
+    const flash = document.getElementById('flash');
+    wrap.classList.remove('punch'); void wrap.offsetWidth; wrap.classList.add('punch');
+    flash.classList.remove('fade'); flash.classList.add('go'); void flash.offsetWidth;
+    setTimeout(()=>{ flash.classList.remove('go'); flash.classList.add('fade'); }, 60);
+  }
+
+  /* ---------------- juice: particle burst ---------------- */
+  const particles = [];
+  const particleGeo = new THREE.BoxGeometry(0.16,0.16,0.16);
+  let lastFrameTime = performance.now();
+
+  function spawnBurst(x,y,z,colorHex){
+    const origin = new THREE.Vector3(cellCenter(x), cellCenter(y), cellCenter(z));
+    for(let i=0;i<6;i++){
+      const mat = new THREE.MeshBasicMaterial({color:colorHex, transparent:true, opacity:1});
+      const m = new THREE.Mesh(particleGeo, mat);
+      m.position.copy(origin);
+      scene.add(m);
+      particles.push({
+        mesh: m,
+        vel: new THREE.Vector3((Math.random()-0.5)*2.6, Math.random()*2.6+1.2, (Math.random()-0.5)*2.6),
+        life: 0,
+        maxLife: 0.55 + Math.random()*0.2
+      });
+    }
+  }
+
+  function updateParticles(dt){
+    for(let i=particles.length-1; i>=0; i--){
+      const p = particles[i];
+      p.life += dt;
+      p.vel.y -= dt*6.5; // gravity
+      p.mesh.position.addScaledVector(p.vel, dt);
+      const t = p.life / p.maxLife;
+      p.mesh.material.opacity = Math.max(0, 1-t);
+      p.mesh.scale.setScalar(Math.max(0.001, 1-t*0.6));
+      if(p.life >= p.maxLife){
+        scene.remove(p.mesh);
+        p.mesh.material.dispose();
+        particles.splice(i,1);
+      }
+    }
+  }
+
+  /* ---------------- world ranking ---------------- */
+  const LOCAL_LB_KEY = 'blockblast3d_scores_v1';
+  function localGetScores(){
+    try{ return JSON.parse(localStorage.getItem(LOCAL_LB_KEY) || '[]'); }
+    catch(e){ return []; }
+  }
+  function localAddScore(name, sc){
+    const arr = localGetScores();
+    arr.push({name, score:sc, ts:Date.now()});
+    arr.sort((a,b)=>b.score-a.score);
+    try{ localStorage.setItem(LOCAL_LB_KEY, JSON.stringify(arr.slice(0,50))); }catch(e){}
+  }
+
+  async function submitScore(name, sc){
+    localAddScore(name, sc);
+    if(FIREBASE_DB_URL){
+      try{
+        await fetch(FIREBASE_DB_URL.replace(/\/$/,'') + '/scores.json', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ name: name.slice(0,12), score: sc, ts: Date.now() })
+        });
+      }catch(e){ /* network unavailable, local copy is already saved */ }
+    }
+  }
+
+  async function fetchLeaderboard(){
+    if(!FIREBASE_DB_URL) return { list: localGetScores().slice(0,20), remote:false };
+    try{
+      const res = await fetch(FIREBASE_DB_URL.replace(/\/$/,'') + '/scores.json');
+      const data = await res.json();
+      const list = data ? Object.values(data).sort((a,b)=>b.score-a.score).slice(0,20) : [];
+      return { list, remote:true };
+    }catch(e){
+      return { list: localGetScores().slice(0,20), remote:false, error:true };
+    }
+  }
+
+  async function loadAndShowRanking(){
+    const listEl = document.getElementById('rankingList');
+    const noteEl = document.getElementById('rankNote');
+    listEl.innerHTML = '<li>読み込み中...</li>';
+    const { list, remote, error } = await fetchLeaderboard();
+    noteEl.textContent = remote
+      ? '世界中のプレイヤーと共有されているランキングです'
+      : (error ? '通信できなかったため、この端末のランキングを表示しています' : 'この端末だけのランキングです(公開後は世界と共有されます)');
+    if(list.length===0){
+      listEl.innerHTML = '<li>まだ記録がありません</li>';
+      return;
+    }
+    listEl.innerHTML = list.map((r,i)=>
+      `<li><span class="rk">${i+1}</span><span class="rname">${escapeHtml(r.name||'名無し')}</span><span class="rscore">${r.score}</span></li>`
+    ).join('');
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  /* ---------------- line clear ---------------- */
+  function clearFullLines(){
+    const toClear = new Set();
+    let lineCount = 0;
+    // x-lines: fix y,z vary x
+    for(let y=0;y<N;y++) for(let z=0;z<N;z++){
+      let full = true;
+      for(let x=0;x<N;x++) if(!grid[x][y][z]) { full=false; break; }
+      if(full){ lineCount++; for(let x=0;x<N;x++) toClear.add(x+','+y+','+z); }
+    }
+    // y-lines
+    for(let x=0;x<N;x++) for(let z=0;z<N;z++){
+      let full = true;
+      for(let y=0;y<N;y++) if(!grid[x][y][z]) { full=false; break; }
+      if(full){ lineCount++; for(let y=0;y<N;y++) toClear.add(x+','+y+','+z); }
+    }
+    // z-lines
+    for(let x=0;x<N;x++) for(let y=0;y<N;y++){
+      let full = true;
+      for(let z=0;z<N;z++) if(!grid[x][y][z]) { full=false; break; }
+      if(full){ lineCount++; for(let z=0;z<N;z++) toClear.add(x+','+y+','+z); }
+    }
+    if(toClear.size>0){
+      toClear.forEach(key=>{
+        const [x,y,z] = key.split(',').map(Number);
+        const colorHex = (grid[x][y][z] && grid[x][y][z].color) || 0x22B14C;
+        grid[x][y][z] = null;
+        animateClearCell(x,y,z);
+        spawnBurst(x,y,z,colorHex);
+      });
+      const gained = toClear.size*10 + (lineCount>1 ? lineCount*20 : 0);
+      addScore(gained);
+      popScore(gained);
+      screenPunch();
+      Sound.clearLine(lineCount-1);
+      if(navigator.vibrate) navigator.vibrate(lineCount>1 ? [20,30,20] : 20);
+      if(lineCount>1) showCombo(lineCount);
+    }
+  }
+
+  /* ---------------- game over ---------------- */
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  function checkGameOver(){
+    const anyPossible = tray.some(p=>p && canPlaceAnywhere(p));
+    if(!anyPossible){
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('nameInput').value = '';
+      document.getElementById('nameInput').disabled = false;
+      document.getElementById('submitScoreBtn').disabled = false;
+      document.getElementById('submitScoreBtn').textContent = '登録';
+      gameOverOverlay.classList.remove('hidden');
+      Sound.gameOver();
+    }
+  }
+
+  document.getElementById('submitScoreBtn').addEventListener('click', async ()=>{
+    const input = document.getElementById('nameInput');
+    const btn = document.getElementById('submitScoreBtn');
+    const name = input.value.trim() || '名無し';
+    btn.disabled = true; input.disabled = true; btn.textContent = '登録中...';
+    await submitScore(name, score);
+    btn.textContent = '登録済み';
+  });
+
+  document.getElementById('restartBtn').addEventListener('click', ()=>{
+    resetGrid();
+    for(let x=0;x<N;x++) for(let y=0;y<N;y++) for(let z=0;z<N;z++) setCellEmpty(x,y,z);
+    score = 0; scoreValueEl.textContent = '0';
+    tray = [randomPiece(), randomPiece(), randomPiece()];
+    renderTray();
+    gameOverOverlay.classList.add('hidden');
+  });
+
+  /* ---------------- intro overlay ---------------- */
+  const introOverlay = document.getElementById('introOverlay');
+  document.getElementById('startBtn').addEventListener('click', ()=>{
+    introOverlay.classList.add('hidden');
+  });
+  document.getElementById('helpBtn').addEventListener('click', ()=>{
+    introOverlay.classList.remove('hidden');
+  });
+
+  /* ---------------- sound toggle ---------------- */
+  const soundBtn = document.getElementById('soundBtn');
+  soundBtn.addEventListener('click', ()=>{
+    const muted = Sound.toggleMute();
+    soundBtn.textContent = muted ? '✕' : '♪';
+    soundBtn.style.opacity = muted ? '0.5' : '1';
+  });
+
+  /* ---------------- ranking overlay ---------------- */
+  const rankingOverlay = document.getElementById('rankingOverlay');
+  document.getElementById('rankBtn').addEventListener('click', ()=>{
+    rankingOverlay.classList.remove('hidden');
+    loadAndShowRanking();
+  });
+  document.getElementById('closeRankBtn').addEventListener('click', ()=>{
+    rankingOverlay.classList.add('hidden');
+  });
+
+  /* ---------------- ghost preview ---------------- */
+  const ghostMatValid = new THREE.MeshBasicMaterial({color:0x22B14C, transparent:true, opacity:0.55});
+  const ghostMatInvalid = new THREE.MeshBasicMaterial({color:0xE5484D, transparent:true, opacity:0.45});
+  const ghostBoxGeo = new THREE.BoxGeometry(0.96,0.96,0.96);
+
+  function clearGhost(){
+    while(ghostGroup.children.length) ghostGroup.remove(ghostGroup.children[0]);
+  }
+
+  function showGhost(cells, valid){
+    clearGhost();
+    for(const c of cells){
+      if(c.x<0||c.x>=N||c.y<0||c.y>=N||c.z<0||c.z>=N) continue;
+      const m = new THREE.Mesh(ghostBoxGeo, valid?ghostMatValid:ghostMatInvalid);
+      m.position.set(cellCenter(c.x), cellCenter(c.y), cellCenter(c.z));
+      ghostGroup.add(m);
+    }
+  }
+
+  /* ---------------- placement (screen-space nearest snap) ---------------- */
+  const projVec = new THREE.Vector3();
+
+  function worldToScreen(x,y,z){
+    projVec.set(x,y,z).project(camera);
+    return {
+      x: (projVec.x*0.5+0.5) * window.innerWidth,
+      y: (-projVec.y*0.5+0.5) * window.innerHeight
+    };
+  }
+
+  // find the valid placement whose on-screen position is closest to the finger's screen position
+  function findNearestValidPlacement(piece, clientX, clientY){
+    let best = null, bestDist = Infinity;
+    for(let x=0;x<N;x++) for(let y=0;y<N;y++) for(let z=0;z<N;z++){
+      const res = isValidPlacement(piece, {x,y,z});
+      if(!res.valid) continue;
+      let cx=0, cy=0, cz=0;
+      for(const c of res.cells){ cx+=c.x; cy+=c.y; cz+=c.z; }
+      const n = res.cells.length;
+      cx/=n; cy/=n; cz/=n;
+      const screenPos = worldToScreen(cellCenter(cx), cellCenter(cy), cellCenter(cz));
+      const dx = screenPos.x - clientX, dy = screenPos.y - clientY;
+      const d2 = dx*dx + dy*dy;
+      if(d2<bestDist){ bestDist=d2; best=res; }
+    }
+    return best;
+  }
+
+  function isPointOverTray(clientX, clientY){
+    const rect = trayEl.getBoundingClientRect();
+    return clientX>=rect.left && clientX<=rect.right && clientY>=rect.top && clientY<=rect.bottom;
+  }
+
+  function updateGhostFromScreen(clientX, clientY){
+    if(draggingSlot===null) return;
+    const piece = tray[draggingSlot];
+    if(!piece){ clearGhost(); lastPlacement=null; return; }
+    const card = trayEl.children[draggingSlot];
+
+    if(isPointOverTray(clientX, clientY)){
+      overTray = true;
+      if(card) card.classList.remove('dragging');
+      clearGhost();
+      lastPlacement = null;
+      return;
+    }
+    overTray = false;
+    if(card) card.classList.add('dragging');
+
+    const best = findNearestValidPlacement(piece, clientX, clientY);
+    if(!best){ clearGhost(); lastPlacement = null; return; }
+    lastPlacement = { valid:true, cells: best.cells, piece };
+    showGhost(best.cells, true);
+  }
+
+  function startDrag(idx, clientX, clientY){
+    if(!tray[idx]) return;
+    draggingSlot = idx;
+    lastPlacement = null;
+    overTray = false;
+    updateGhostFromScreen(clientX, clientY);
+  }
+
+  function commitDrag(){
+    if(draggingSlot===null) return;
+    const card = trayEl.children[draggingSlot];
+    if(card) card.classList.remove('dragging');
+    if(!overTray && lastPlacement && lastPlacement.valid){
+      const piece = tray[draggingSlot];
+      const colorHex = PLANE_COLOR[piece.plane];
+      for(const c of lastPlacement.cells){
+        grid[c.x][c.y][c.z] = {color: colorHex};
+        setCellFilled(c.x, c.y, c.z, colorHex);
+      }
+      tray[draggingSlot] = null;
+      Sound.place();
+      clearFullLines();
+      refillIfNeeded();
+    }
+    clearGhost();
+    draggingSlot = null;
+    lastPlacement = null;
+    overTray = false;
+  }
+
+  /* ---------------- input: touch (1 finger = rotate/move, 2 fingers = pinch zoom) ---------------- */
+  let camMode = 'none'; // 'none' | 'rotate' | 'zoom'
+  let rotateLast = null;
+  let zoomLastDist = null;
+
+  function touchDist(t0,t1){ const dx=t0.clientX-t1.clientX, dy=t0.clientY-t1.clientY; return Math.sqrt(dx*dx+dy*dy); }
+
+  function syncCamMode(touches){
+    if(draggingSlot!==null){ camMode='none'; return; }
+    if(touches.length===1){
+      camMode='rotate';
+      rotateLast = { x:touches[0].clientX, y:touches[0].clientY };
+    } else if(touches.length===2){
+      camMode='zoom';
+      zoomLastDist = touchDist(touches[0], touches[1]);
+    } else {
+      camMode='none';
+    }
+  }
+
+  document.addEventListener('touchstart', (e)=>{
+    syncCamMode(e.touches);
+  }, {passive:true});
+
+  document.addEventListener('touchmove', (e)=>{
+    if(draggingSlot!==null && e.touches.length>=1){
+      updateGhostFromScreen(e.touches[0].clientX, e.touches[0].clientY);
+      e.preventDefault();
+      return;
+    }
+    if(camMode==='rotate' && e.touches.length===1){
+      const t = e.touches[0];
+      const dx = t.clientX - rotateLast.x;
+      const dy = t.clientY - rotateLast.y;
+      theta -= dx*0.007;
+      phi = clamp(phi - dy*0.007, 0.25, Math.PI-0.25);
+      rotateLast = { x:t.clientX, y:t.clientY };
+      updateCamera();
+      e.preventDefault();
+    } else if(camMode==='zoom' && e.touches.length===2){
+      const d = touchDist(e.touches[0], e.touches[1]);
+      const scaleDelta = d / zoomLastDist;
+      radius = clamp(radius / scaleDelta, 4.5, 18);
+      zoomLastDist = d;
+      updateCamera();
+      e.preventDefault();
+    }
+  }, {passive:false});
+
+  document.addEventListener('touchend', (e)=>{
+    if(draggingSlot!==null && e.touches.length===0){
+      commitDrag();
+    }
+    syncCamMode(e.touches);
+  }, {passive:false});
+
+  /* ---------------- input: mouse (desktop testing) ---------------- */
+  let mouseCameraDrag = false;
+  let mouseLast = null;
+
+  renderer.domElement.addEventListener('mousedown', (e)=>{
+    if(draggingSlot!==null) return;
+    mouseCameraDrag = true;
+    mouseLast = {x:e.clientX, y:e.clientY};
+  });
+  document.addEventListener('mousemove', (e)=>{
+    if(draggingSlot!==null){
+      updateGhostFromScreen(e.clientX, e.clientY);
+      return;
+    }
+    if(mouseCameraDrag){
+      const dx = e.clientX - mouseLast.x;
+      const dy = e.clientY - mouseLast.y;
+      theta -= dx*0.007;
+      phi = clamp(phi - dy*0.007, 0.25, Math.PI-0.25);
+      mouseLast = {x:e.clientX, y:e.clientY};
+      updateCamera();
+    }
+  });
+  document.addEventListener('mouseup', ()=>{
+    mouseCameraDrag = false;
+    if(draggingSlot!==null) commitDrag();
+  });
+  renderer.domElement.addEventListener('wheel', (e)=>{
+    radius = clamp(radius + e.deltaY*0.01, 4.5, 18);
+    updateCamera();
+    e.preventDefault();
+  }, {passive:false});
+
+  /* ---------------- render loop ---------------- */
+  function animate(){
+    requestAnimationFrame(animate);
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - lastFrameTime)/1000);
+    lastFrameTime = now;
+    updateParticles(dt);
+    renderer.render(scene, camera);
+    renderTrayPreviews();
+  }
+  animate();
+
+})();
+</script>
+</body>
+</html>
